@@ -32,6 +32,7 @@ import {
   persistMutePreference,
   readMutePreference,
 } from "./lib/audioGate";
+import "./App.css";
 
 const Motion = motion;
 
@@ -40,27 +41,17 @@ function WaveLoader() {
 
   return (
     <Html center zIndexRange={[100, 0]}>
-      <div className="fixed inset-0 w-screen h-screen bg-black flex flex-col items-center justify-center z-[999] overflow-hidden">
-        <div className="relative z-20 text-center mix-blend-difference">
-          <h1 className="text-9xl font-black text-white tracking-tighter opacity-80">
-            {progress.toFixed(0)}%
-          </h1>
-          <p className="text-white text-sm tracking-[0.8em] uppercase mt-4 animate-pulse">
-            Carregando Grand Line
-          </p>
+      <div className="loader-screen" role="status" aria-live="polite">
+        <div className="loader-content">
+          <h2>{progress.toFixed(0)}%</h2>
+          <p>Carregando experiência…</p>
         </div>
         <Motion.div
-          className="absolute bottom-0 left-0 w-full bg-[#8b0000]"
-          initial={{ height: "0%" }}
-          animate={{ height: `${progress}%` }}
-          transition={{ type: "spring", stiffness: 50, damping: 20 }}
-        >
-          <div className="absolute -top-[40px] left-0 w-[200%] h-[60px] flex animate-wave">
-            <svg className="w-full h-full fill-[#8b0000]" viewBox="0 0 1200 120" preserveAspectRatio="none">
-              <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z" />
-            </svg>
-          </div>
-        </Motion.div>
+          className="loader-bar"
+          initial={{ width: "0%" }}
+          animate={{ width: `${progress}%` }}
+          transition={{ ease: "easeOut", duration: 0.25 }}
+        />
       </div>
     </Html>
   );
@@ -70,8 +61,8 @@ function GearSecondSteam({ active }) {
   return (
     <group position={[0, -1, 0]}>
       <Cloud
-        opacity={active ? 0.4 : 0.1}
-        speed={active ? 1 : 0.5}
+        opacity={active ? 0.35 : 0.08}
+        speed={active ? 1 : 0.45}
         width={3}
         depth={0.5}
         segments={10}
@@ -81,7 +72,7 @@ function GearSecondSteam({ active }) {
       />
       {active && (
         <Cloud
-          opacity={0.3}
+          opacity={0.25}
           speed={0.7}
           width={2}
           depth={0.2}
@@ -100,9 +91,7 @@ function DynamicLights({ active }) {
   useFrame(() => {
     if (!spotlightRef.current) return;
     const targetInt = active ? 24 : 8;
-    const targetColor = active
-      ? new THREE.Color("#ff0000")
-      : new THREE.Color("white");
+    const targetColor = active ? new THREE.Color("#ff0000") : new THREE.Color("white");
     spotlightRef.current.intensity = THREE.MathUtils.lerp(
       spotlightRef.current.intensity,
       targetInt,
@@ -121,15 +110,7 @@ function DynamicLights({ active }) {
   );
 }
 
-function RealCan({
-  active,
-  onClick,
-  arSessionActive,
-  arScale,
-  arRotationY,
-  arPosition,
-  arPlaced,
-}) {
+function RealCan({ active, onClick, arSessionActive, arScale, arRotationY, arPosition, arPlaced }) {
   const meshRef = useRef();
   const loadedDropletsTexture = useLoader(TextureLoader, "/textures/droplets_normal.jpg");
   const obj = useLoader(OBJLoader, "/14025_Soda_Can_v3_l3.obj");
@@ -182,7 +163,6 @@ function RealCan({
   }, [baseObj, overlayObj, dropletsTexture, texture]);
 
   useFrame((state) => {
-    // eslint-disable-next-line react-hooks/immutability
     dropletsTexture.offset.y -= 0.00035;
     dropletsTexture.offset.x = Math.sin(state.clock.elapsedTime * 0.2) * 0.01;
 
@@ -191,96 +171,83 @@ function RealCan({
     if (arSessionActive) {
       const targetPosition = arPosition ?? [0, -0.2, -1.1];
       meshRef.current.position.set(targetPosition[0], targetPosition[1], targetPosition[2]);
-      meshRef.current.rotation.set(-Math.PI / 2, arRotationY, 0);
-      meshRef.current.scale.setScalar(0.16 * arScale);
+      meshRef.current.rotation.set(0, arRotationY, 0);
+      meshRef.current.scale.setScalar(arScale);
       return;
     }
 
-    if (active) {
-      meshRef.current.position.x = (Math.random() - 0.5) * 0.03;
-      meshRef.current.position.z = (Math.random() - 0.5) * 0.03;
-      const scale = 0.2 + Math.sin(state.clock.elapsedTime * 10) * 0.002;
-      meshRef.current.scale.set(scale, scale, scale);
-      return;
-    }
+    const targetY = active ? 0.32 : 0;
+    const targetRotX = active ? Math.sin(state.clock.elapsedTime * 6) * 0.03 : 0;
+    const targetRotY = active ? state.clock.elapsedTime * 0.8 : state.clock.elapsedTime * 0.45;
+    const targetScale = active ? 1.08 : 1;
 
-    meshRef.current.position.set(0, -2, 0);
-    meshRef.current.rotation.set(-Math.PI / 2, 0, 0);
-    meshRef.current.scale.set(0.2, 0.2, 0.2);
+    meshRef.current.position.y = THREE.MathUtils.lerp(meshRef.current.position.y, targetY, 0.06);
+    meshRef.current.rotation.x = THREE.MathUtils.lerp(meshRef.current.rotation.x, targetRotX, 0.1);
+    meshRef.current.rotation.y = THREE.MathUtils.lerp(meshRef.current.rotation.y, targetRotY, 0.035);
+    meshRef.current.scale.setScalar(
+      THREE.MathUtils.lerp(meshRef.current.scale.x, targetScale, active ? 0.08 : 0.05),
+    );
   });
 
   return (
-    <Float
-      speed={active || arSessionActive ? 0 : 2}
-      rotationIntensity={active || arSessionActive ? 0 : 0.2}
-      floatIntensity={active || arSessionActive ? 0 : 1}
-    >
+    <Float speed={1.8} rotationIntensity={0.08} floatIntensity={0.3} floatingRange={[-0.15, 0.15]}>
       <group
         ref={meshRef}
-        scale={0.2}
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -2, 0]}
+        position={[0, 0, 0]}
         onClick={onClick}
-        onPointerOver={() => (document.body.style.cursor = "pointer")}
-        onPointerOut={() => (document.body.style.cursor = "auto")}
+        onPointerDown={onClick}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onClick();
+          }
+        }}
       >
-        <primitive object={baseObj} />
-        <primitive object={overlayObj} scale={[1.001, 1.001, 1.001]} />
+        <primitive object={baseObj} scale={2.6} />
+        <primitive object={overlayObj} scale={2.62} />
+        <mesh position={[0, -2.0, 0]} visible={!arSessionActive || arPlaced}>
+          <circleGeometry args={[0.9, 42]} />
+          <meshBasicMaterial color={active ? "#5c0000" : "#0b0b0b"} transparent opacity={active ? 0.35 : 0.22} />
+        </mesh>
       </group>
-      {arSessionActive && !arPlaced && (
-        <Html center>
-          <div className="rounded-lg border border-[#d4af37]/60 bg-black/70 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-white">
-            Toque para posicionar
-          </div>
-        </Html>
-      )}
     </Float>
   );
 }
 
+const modalVariants = {
+  hidden: { opacity: 0, scale: 0.96 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.25 } },
+  exit: { opacity: 0, scale: 0.97, transition: { duration: 0.18 } },
+};
+
 const WantedModal = ({ onClose }) => (
   <Motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+    className="wanted-backdrop"
+    variants={modalVariants}
+    initial="hidden"
+    animate="visible"
+    exit="exit"
     onClick={onClose}
   >
-    <Motion.div
-      initial={{ scale: 0.8, rotate: -5 }}
-      animate={{ scale: 1, rotate: 0 }}
-      exit={{ scale: 0.8, rotate: 5 }}
-      className="relative bg-[#f3eacb] text-[#3e2723] w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl border-8 border-double border-[#5d4037] p-6 md:p-8"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="text-center space-y-3 relative z-10 flex flex-col items-center">
-        <div className="w-full border-b-4 border-[#3e2723] mb-2 pb-2">
-          <h2 className="text-5xl md:text-6xl font-black tracking-widest font-serif uppercase">WANTED</h2>
-          <p className="font-serif italic text-lg opacity-80 mt-1">DEAD OR ALIVE</p>
-        </div>
-        <div className="w-full aspect-[4/3] bg-gray-900 border-4 border-[#3e2723] flex items-center justify-center overflow-hidden relative shadow-inner">
-          <div className="absolute inset-0 bg-red-900/30"></div>
-          <h3 className="text-white font-black text-4xl uppercase -rotate-12 drop-shadow-lg z-10">Você</h3>
-        </div>
-        <div className="w-full mt-4">
-          <h3 className="text-3xl md:text-4xl font-black uppercase font-serif tracking-wide">PIRATA LENDÁRIO</h3>
-          <div className="flex items-center justify-between px-4 text-2xl md:text-3xl font-bold font-serif border-t-4 border-b-4 border-[#3e2723] py-3 mt-2">
-            <span className="text-xl self-start mt-1">฿</span>
-            <span className="tracking-widest">3.000.000.000</span>
-            <span className="text-sm self-end mb-1">-</span>
-          </div>
-          <p className="text-xs font-bold uppercase tracking-widest mt-2 text-left w-full pl-2">Marine HQ / Coca-Cola Corp</p>
-        </div>
-        <button
-          onClick={onClose}
-          className="mt-6 w-full bg-[#8b0000] text-[#f3eacb] font-bold py-3 uppercase tracking-[0.2em] hover:bg-red-700 transition-colors shadow-lg border-2 border-[#3e2723]"
-        >
-          Capturar Recompensa
-        </button>
-      </div>
+    <Motion.div className="wanted-modal" onClick={(event) => event.stopPropagation()}>
+      <p className="wanted-tag">Wanted poster</p>
+      <h2>WANTED</h2>
+      <p className="wanted-sub">DEAD OR ALIVE</p>
+      <div className="wanted-photo">Você</div>
+      <p className="wanted-name">Pirata Lendário</p>
+      <p className="wanted-bounty">฿ 3.000.000.000</p>
+      <button onClick={onClose} className="btn btn-secondary">
+        Fechar
+      </button>
     </Motion.div>
   </Motion.div>
 );
+
+function chapterScroll(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 export default function App() {
   const [active, setActive] = useState(false);
@@ -302,6 +269,9 @@ export default function App() {
   const [arAnchorPosition, setArAnchorPosition] = useState(null);
 
   const [toast, setToast] = useState("");
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
 
   useEffect(() => {
     const cleanup = listenForFirstInteraction(() => {
@@ -319,20 +289,32 @@ export default function App() {
         return;
       }
 
-      const supported = await navigator.xr
-        .isSessionSupported("immersive-ar")
-        .catch(() => false);
+      const supported = await navigator.xr.isSessionSupported("immersive-ar").catch(() => false);
       setArSupported(Boolean(supported));
       setArSupportChecked(true);
     };
 
     checkArSupport();
+
+    const hasSeenTooltip = localStorage.getItem("coca-onepiece-tooltip-seen") === "1";
+    if (demoMode || !hasSeenTooltip) {
+      setShowTooltip(true);
+      const timeout = setTimeout(() => {
+        setShowTooltip(false);
+        localStorage.setItem("coca-onepiece-tooltip-seen", "1");
+      }, 6000);
+      return () => {
+        clearTimeout(timeout);
+        cleanup();
+      };
+    }
+
     return cleanup;
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
     if (!toast) return undefined;
-    const timeout = setTimeout(() => setToast(""), 2800);
+    const timeout = setTimeout(() => setToast(""), 2600);
     return () => clearTimeout(timeout);
   }, [toast]);
 
@@ -355,7 +337,7 @@ export default function App() {
     setPaperTrigger((prev) => prev + 1);
   };
 
-  const onSessionStateChange = useCallback((activeState, errorMessage) => {
+  const onSessionStateChange = useCallback((activeState) => {
     setArSessionActive(activeState);
     if (!activeState) {
       setArRequested(false);
@@ -363,7 +345,6 @@ export default function App() {
       setArHitPose(null);
       setArAnchorPosition(null);
     }
-    if (errorMessage) setToast(errorMessage);
   }, []);
 
   const onHitPose = useCallback(
@@ -383,126 +364,39 @@ export default function App() {
   }, [arHitPose, arPlaced]);
 
   const handleArClick = async () => {
+    setUserHasInteracted(true);
+    if (!arSupportChecked) return;
+
     if (!arSupported) {
-      setToast("AR não disponível neste dispositivo.");
+      const currentUrl = window.location.href;
+      try {
+        await navigator.clipboard.writeText(currentUrl);
+        setToast("Link copiado. Abra no celular.");
+      } catch {
+        setToast("Copie este link e abra no celular.");
+      }
       return;
     }
-    setUserHasInteracted(true);
+
     setArPlaced(false);
     setArAnchorPosition(null);
     setArRequested(true);
   };
 
-  const arDisabled = !arSupported || !arSupportChecked || arSessionActive;
-  const arUnsupportedReason = !arSupportChecked
-    ? "Verificando suporte AR..."
-    : !arSupported
-      ? "AR não disponível neste dispositivo"
-      : arSessionActive
-        ? "Sessão AR ativa"
-        : "";
+  const handleCopyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText("portfolio@example.com");
+      setToast("Email copiado.");
+    } catch {
+      setToast("Não foi possível copiar o email.");
+    }
+  };
+
+  const githubUrl = "https://github.com";
 
   return (
-    <div
-      className="w-screen h-screen relative overflow-hidden bg-cover bg-center bg-no-repeat bg-black"
-      style={{ backgroundImage: "url('/bg-onepiece.jpg')" }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-transparent to-black/60 pointer-events-none z-0"></div>
-      <style>{`@keyframes wave {0%{transform:translateX(0);}100%{transform:translateX(-50%);}} .animate-wave {animation: wave 4s linear infinite;}`}</style>
-
-      <div
-        className={`absolute inset-0 z-10 flex flex-col justify-between items-center py-10 px-4 pointer-events-none select-none transition-opacity duration-500 ${modalOpen ? "opacity-0" : "opacity-100"}`}
-      >
-        <Motion.div
-          initial={{ opacity: 0, y: -30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1 }}
-          className="text-center mt-6"
-        >
-          <p className="text-red-500 font-sans tracking-[0.3em] text-xs md:text-sm uppercase font-bold drop-shadow-md mb-2">
-            Abra a Felicidade na Grand Line
-          </p>
-          <h1 className="text-white font-sans text-5xl md:text-7xl font-black uppercase italic leading-tight drop-shadow-2xl">
-            SABOR <span className="text-red-600">LENDÁRIO</span>
-          </h1>
-          <p className="text-white/40 text-[10px] mt-4 tracking-widest uppercase animate-pulse">
-            {active
-              ? "MODO HAKI ATIVADO - CLIQUE NOVAMENTE PARA ACALMAR"
-              : "CLIQUE NA LATA PARA LIBERAR O PODER"}
-          </p>
-        </Motion.div>
-
-        <div className="mb-12 z-50 pointer-events-auto" onClick={handleOpenModal}>
-          <Motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="group relative flex flex-col items-center justify-center gap-2 cursor-pointer"
-          >
-            <div className="relative w-20 h-20">
-              <div className="absolute inset-0 bg-red-600 blur-2xl opacity-0 group-hover:opacity-50 transition-opacity duration-500 rounded-full"></div>
-              <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] fill-white group-hover:fill-red-100 transition-colors duration-300">
-                <path d="M441.5 107.1c-14.4-14.4-37.7-14.4-52.1 0l-37.5 37.5c-28.9-19-63.5-30.1-100.9-30.1-37.4 0-72 11.1-100.9 30.1L112.6 107c-14.4-14.4-37.7-14.4-52.1 0-14.4 14.4-14.4 37.7 0 52.1l37.5 37.5C79.1 225.5 68 260.1 68 297.5c0 37.4 11.1 72 30.1 100.9l-37.5 37.5c-14.4 14.4-14.4 37.7 0 52.1s37.7 14.4 52.1 0l37.5-37.5c28.9 19 63.5 30.1 100.9 30.1s72-11.1 100.9-30.1l37.5 37.5c14.4 14.4 37.7 14.4 52.1 0s14.4-37.7 0-52.1l-37.5-37.5c19-28.9 30.1-63.5 30.1-100.9 0-37.4-11.1-72-30.1-100.9l37.5-37.5c14.4-14.5 14.4-37.7 0-52.1zM251 405.6c-59.7 0-108-48.3-108-108s48.3-108 108-108 108 48.3 108 108-48.3 108-108 108z" />
-              </svg>
-            </div>
-            <div className="bg-gradient-to-r from-red-900 via-red-700 to-red-900 border-2 border-[#d4af37] px-6 py-1.5 transform skew-x-[-10deg] shadow-[0_10px_20px_rgba(0,0,0,0.5)] group-hover:shadow-[0_0_25px_rgba(255,0,0,0.6)] transition-all">
-              <span className="block transform skew-x-[10deg] text-white font-sans font-black uppercase tracking-widest text-base md:text-lg drop-shadow-md whitespace-nowrap">
-                Reivindicar Tesouro
-              </span>
-            </div>
-          </Motion.button>
-        </div>
-      </div>
-
-      <button
-        onClick={toggleMute}
-        className="fixed top-5 right-4 z-[60] rounded-lg border border-[#d4af37]/40 bg-black/55 px-3 py-2 text-xs font-bold uppercase tracking-widest text-white pointer-events-auto"
-      >
-        {muted ? "Ativar som" : "Mutar som"}
-      </button>
-
-      <ARButton disabled={arDisabled} unsupportedReason={arUnsupportedReason} onClick={handleArClick} />
-
-      {arSessionActive && arPlaced && (
-        <div className="fixed bottom-24 right-4 z-[70] w-56 rounded-xl border border-white/20 bg-black/65 p-3 text-white pointer-events-auto">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-white/80 mb-2">Ajustes AR</p>
-          <label className="block text-[11px] mb-2">
-            Escala
-            <input
-              type="range"
-              min="0.6"
-              max="1.7"
-              step="0.05"
-              value={arScale}
-              onChange={(e) => setArScale(Number(e.target.value))}
-              className="w-full"
-            />
-          </label>
-          <label className="block text-[11px]">
-            Rotação
-            <input
-              type="range"
-              min={-Math.PI}
-              max={Math.PI}
-              step="0.05"
-              value={arRotationY}
-              onChange={(e) => setArRotationY(Number(e.target.value))}
-              className="w-full"
-            />
-          </label>
-        </div>
-      )}
-
-      {toast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[80] rounded-lg bg-black/80 border border-white/20 px-4 py-2 text-xs uppercase tracking-wider text-white">
-          {toast}
-        </div>
-      )}
-
-      <AnimatePresence>
-        {modalOpen && <WantedModal onClose={() => setModalOpen(false)} />}
-      </AnimatePresence>
-
-      <div className="absolute inset-0 z-0">
+    <div className="app-shell">
+      <div className="stage-layer" aria-hidden="true">
         <Canvas shadows camera={{ position: [0, 0, 6], fov: 40 }} gl={{ alpha: true }}>
           <Suspense fallback={<WaveLoader />}>
             <XRExperience
@@ -530,16 +424,13 @@ export default function App() {
             />
             <GearSecondSteam active={active} />
             <ThousandSunny hasModel={hasSunnyModel} />
-
             {active && (
               <>
                 <Sparkles count={120} scale={8} size={12} speed={4.2} opacity={1} color="black" position={[0, 0, 1]} noise={3} />
                 <Sparkles count={65} scale={7} size={9} speed={3.8} opacity={1} color="#ff0000" position={[0, 0, 1]} noise={2} />
               </>
             )}
-
             <Sparkles count={34} scale={10} size={3} speed={0.4} opacity={0.5} color="#ffd700" position={[0, -2, 0]} />
-
             <RealCan
               active={active}
               onClick={handleCanClick}
@@ -550,13 +441,12 @@ export default function App() {
               arPlaced={arPlaced}
             />
             <ContactShadows position={[0, -2.5, 0]} opacity={0.6} scale={10} blur={2.5} far={4} />
-
             <OrbitControls
               enableZoom={false}
               enablePan={false}
               enableDamping
               dampingFactor={0.05}
-              rotateSpeed={0.4}
+              rotateSpeed={0.45}
               autoRotate={!active && !arSessionActive}
               autoRotateSpeed={0.5}
               minPolarAngle={Math.PI / 3.2}
@@ -565,6 +455,149 @@ export default function App() {
           </Suspense>
         </Canvas>
       </div>
+
+      <div className="stage-overlays" aria-hidden="true" />
+
+      <main className="story-layer">
+        <section id="hero" className="chapter hero" aria-label="Hero">
+          <Motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="hero-content"
+          >
+            <p className="kicker">Experiência interativa</p>
+            <h1>Sabor Lendário</h1>
+            <p className="subtitle">
+              Experiência 3D interativa inspirada em aventura e colecionáveis.
+            </p>
+            <p className="microcopy">
+              Arraste para girar. Clique na lata para ativar o modo Haki.
+            </p>
+            <div className="hero-ctas">
+              <button className="btn btn-primary" onClick={() => chapterScroll("interacao")}>
+                Explorar agora
+              </button>
+              <button className="btn btn-ghost" onClick={() => chapterScroll("making-of")}>
+                Ver making of
+              </button>
+            </div>
+          </Motion.div>
+
+          <div className="hero-controls" aria-label="Controles">
+            <button onClick={toggleMute} className="control-chip" aria-label="Alternar som">
+              Som: {muted ? "Off" : "On"}
+            </button>
+            <ARButton
+              arSupported={arSupported}
+              arSupportChecked={arSupportChecked}
+              arSessionActive={arSessionActive}
+              onClick={handleArClick}
+            />
+            <button onClick={handleOpenModal} className="control-chip control-chip-secondary">
+              Easter egg
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {showTooltip && (
+              <Motion.div
+                className="tooltip-guide"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+              >
+                <p>Arraste para girar</p>
+                <p>Clique na lata para ativar</p>
+              </Motion.div>
+            )}
+          </AnimatePresence>
+
+          {demoMode && (
+            <aside className="demo-mode" aria-label="Roteiro demo">
+              <strong>DEMO MODE</strong>
+              <ol>
+                <li>Apresente a hero e arraste a lata.</li>
+                <li>Clique na lata para ativar Haki.</li>
+                <li>Mostre AR no celular com link copiado.</li>
+              </ol>
+            </aside>
+          )}
+        </section>
+
+        <section id="interacao" className="chapter panel" aria-label="Como interagir">
+          <Motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }}>
+            <h2>Como interagir</h2>
+            <div className="cards-grid">
+              <article className="info-card"><h3>Gire a lata (arraste)</h3><p>Use toque ou mouse para explorar a peça em tempo real.</p></article>
+              <article className="info-card"><h3>Clique para ativar efeito</h3><p>Ative o modo Haki e veja partículas, vapor e luz cinemática.</p></article>
+              <article className="info-card"><h3>Veja em AR no celular</h3><p>Abra em um dispositivo móvel para projetar a cena no ambiente.</p></article>
+            </div>
+          </Motion.div>
+        </section>
+
+        <section id="making-of" className="chapter panel" aria-label="Como foi feito">
+          <Motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }}>
+            <h2>Como foi feito</h2>
+            <p className="stack">React + Three.js (R3F/drei) · WebXR · WebAudio gate</p>
+            <ul className="bullet-list">
+              <li>Performance: lazy load, assets controlados e fallback elegante.</li>
+              <li>Stage sticky com narrativa curta para leitura focada.</li>
+              <li>UI premium com overlays, contraste e estados acessíveis.</li>
+            </ul>
+          </Motion.div>
+        </section>
+
+        <section id="contato" className="chapter panel" aria-label="Contato">
+          <Motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }}>
+            <h2>Contato</h2>
+            <div className="contact-actions">
+              <a className="btn btn-ghost" href={githubUrl} target="_blank" rel="noreferrer">GitHub</a>
+              <a className="btn btn-ghost" href="#">LinkedIn</a>
+              <a className="btn btn-ghost" href="mailto:portfolio@example.com">Email</a>
+              <button className="btn btn-secondary" onClick={handleCopyEmail}>Copiar email</button>
+            </div>
+          </Motion.div>
+        </section>
+
+        <footer className="chapter footer">
+          <p>Projeto conceitual para portfólio. Não afiliado. Marcas pertencem aos seus donos.</p>
+        </footer>
+      </main>
+
+      {arSessionActive && arPlaced && (
+        <div className="ar-adjustments">
+          <p>Ajustes AR</p>
+          <label>
+            Escala
+            <input
+              type="range"
+              min="0.6"
+              max="1.7"
+              step="0.05"
+              value={arScale}
+              onChange={(e) => setArScale(Number(e.target.value))}
+            />
+          </label>
+          <label>
+            Rotação
+            <input
+              type="range"
+              min={-Math.PI}
+              max={Math.PI}
+              step="0.05"
+              value={arRotationY}
+              onChange={(e) => setArRotationY(Number(e.target.value))}
+            />
+          </label>
+        </div>
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
+
+      <AnimatePresence>
+        {modalOpen && <WantedModal onClose={() => setModalOpen(false)} />}
+      </AnimatePresence>
     </div>
   );
 }
