@@ -5,12 +5,14 @@ export function persistMutePreference(muted) {
   localStorage.setItem(AUDIO_MUTE_KEY, JSON.stringify(Boolean(muted)));
 }
 
-/** Read mute preference from localStorage; defaults to false. */
+/** Read mute preference from localStorage; defaults to true (muted) for first visit. */
 export function readMutePreference() {
   try {
-    return JSON.parse(localStorage.getItem(AUDIO_MUTE_KEY) ?? "false") === true;
+    const value = localStorage.getItem(AUDIO_MUTE_KEY);
+    if (value === null) return true;
+    return JSON.parse(value) === true;
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -31,14 +33,10 @@ export function listenForFirstInteraction(onInteract) {
   const options = { passive: true };
   const events = ["pointerdown", "touchstart", "keydown"];
 
-  events.forEach((eventName) =>
-    window.addEventListener(eventName, markInteracted, options),
-  );
+  events.forEach((eventName) => window.addEventListener(eventName, markInteracted, options));
 
   const cleanup = () => {
-    events.forEach((eventName) =>
-      window.removeEventListener(eventName, markInteracted, options),
-    );
+    events.forEach((eventName) => window.removeEventListener(eventName, markInteracted, options));
   };
 
   return cleanup;
