@@ -1,603 +1,390 @@
-import React, {
-  useRef,
-  Suspense,
-  useLayoutEffect,
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-} from "react";
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import {
-  Float,
-  Sparkles,
-  Environment,
-  Html,
-  useProgress,
-  ContactShadows,
-  Cloud,
-  OrbitControls,
-  CameraShake,
-} from "@react-three/drei";
-import { motion, AnimatePresence } from "framer-motion";
-import { TextureLoader, RepeatWrapping } from "three";
-import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Canvas } from "@react-three/fiber";
+import { Environment, OrbitControls, Sparkles, ContactShadows, Html, useProgress } from "@react-three/drei";
+import { motion } from "framer-motion";
 import * as THREE from "three";
-import AudioController from "./components/AudioController";
 import ThousandSunny from "./components/ThousandSunny";
-import ARButton from "./components/ARButton";
-import XRExperience from "./components/XRExperience";
-import {
-  listenForFirstInteraction,
-  persistMutePreference,
-  readMutePreference,
-} from "./lib/audioGate";
+import RealCan from "./components/RealCan";
+import IntroOverlay from "./components/IntroOverlay";
+import OnboardingOverlay from "./components/OnboardingOverlay";
 import "./App.css";
 
 const Motion = motion;
+const CONTACT_EMAIL = "crew@grandline-coke.studio";
 
-function WaveLoader() {
+function Loader() {
   const { progress } = useProgress();
-
   return (
-    <Html center zIndexRange={[100, 0]}>
-      <div className="loader-screen" role="status" aria-live="polite">
-        <div className="loader-content">
-          <h2>{progress.toFixed(0)}%</h2>
-          <p>Carregando experiência…</p>
-        </div>
-        <Motion.div
-          className="loader-bar"
-          initial={{ width: "0%" }}
-          animate={{ width: `${progress}%` }}
-          transition={{ ease: "easeOut", duration: 0.25 }}
-        />
-      </div>
+    <Html center>
+      <div className="loader">Carregando {progress.toFixed(0)}%</div>
     </Html>
   );
 }
 
-function GearSecondSteam({ active }) {
-  return (
-    <group position={[0, -1, 0]}>
-      <Cloud
-        opacity={active ? 0.35 : 0.08}
-        speed={active ? 1 : 0.45}
-        width={3}
-        depth={0.5}
-        segments={10}
-        bounds={[2, 2, 2]}
-        color={active ? "#ff0000" : "#8b0000"}
-        position={[0, 0, -1]}
-      />
-      {active && (
-        <Cloud
-          opacity={0.25}
-          speed={0.7}
-          width={2}
-          depth={0.2}
-          segments={5}
-          color="#ffffff"
-          position={[0, 1, 0]}
-        />
-      )}
-    </group>
-  );
-}
-
-function DynamicLights({ active }) {
-  const spotlightRef = useRef();
-
-  useFrame(() => {
-    if (!spotlightRef.current) return;
-    const targetInt = active ? 24 : 8;
-    const targetColor = active ? new THREE.Color("#ff0000") : new THREE.Color("white");
-    spotlightRef.current.intensity = THREE.MathUtils.lerp(
-      spotlightRef.current.intensity,
-      targetInt,
-      0.05,
-    );
-    spotlightRef.current.color.lerp(targetColor, 0.05);
-  });
-
+function Scene({
+  introActive,
+  introProgress,
+  hakiPulseActive,
+  onHaki,
+  onHover,
+  onDragged,
+  firstDragDone,
+}) {
   return (
     <>
-      <spotLight ref={spotlightRef} position={[5, 10, 7]} angle={0.5} penumbra={1} castShadow />
-      <spotLight position={[-5, 2, -5]} intensity={active ? 0 : 8} color="#00ffff" />
-      <spotLight position={[5, 2, -5]} intensity={active ? 0 : 8} color="#ffaa00" />
-      <ambientLight intensity={active ? 0.1 : 0.6} />
+      <color attach="background" args={["#04070d"]} />
+      <ambientLight intensity={hakiPulseActive ? 0.55 : 0.35} />
+      <directionalLight position={[3, 5, 4]} intensity={hakiPulseActive ? 2.2 : 1.2} color={hakiPulseActive ? "#ffd39f" : "#ffffff"} />
+      <directionalLight position={[-6, 3, -6]} intensity={hakiPulseActive ? 1.1 : 0.4} color="#5b8dc7" />
+
+      <ThousandSunny mode={introActive ? "intro" : "loop"} progress={introProgress} onIntroDone={() => {}} />
+
+      <group position={[0, 0, 0]}>
+        <RealCan hakiPulseActive={hakiPulseActive} onClick={onHaki} onHoverChange={onHover} />
+      </group>
+
+      <Sparkles count={hakiPulseActive ? 180 : 70} scale={[8, 4, 8]} size={hakiPulseActive ? 2.8 : 1.2} speed={hakiPulseActive ? 1.2 : 0.45} color={hakiPulseActive ? "#ffedca" : "#ffe5c3"} />
+      <ContactShadows position={[0, -1.55, 0]} opacity={0.4} blur={2.8} scale={12} />
+      <Environment preset="sunset" />
+
+      <OrbitControls
+        enableZoom={false}
+        minPolarAngle={Math.PI / 2.4}
+        maxPolarAngle={Math.PI / 1.8}
+        minAzimuthAngle={-0.8}
+        maxAzimuthAngle={0.8}
+        onStart={() => onDragged()}
+      />
+
+      {firstDragDone && (
+        <Html position={[0, -0.1, 1.2]} center>
+          <div className="drag-hint">Girar</div>
+        </Html>
+      )}
     </>
   );
 }
 
-function RealCan({ active, onClick, arSessionActive, arScale, arRotationY, arPosition, arPlaced }) {
-  const meshRef = useRef();
-  const loadedDropletsTexture = useLoader(TextureLoader, "/textures/droplets_normal.jpg");
-  const obj = useLoader(OBJLoader, "/14025_Soda_Can_v3_l3.obj");
-  const texture = useLoader(TextureLoader, "/coca-label.jpg");
-
-  const baseObj = useMemo(() => obj.clone(true), [obj]);
-  const overlayObj = useMemo(() => obj.clone(true), [obj]);
-  const dropletsTexture = useMemo(() => {
-    const textureCopy = loadedDropletsTexture.clone();
-    textureCopy.wrapS = RepeatWrapping;
-    textureCopy.wrapT = RepeatWrapping;
-    textureCopy.repeat.set(2, 3);
-    textureCopy.flipY = false;
-    return textureCopy;
-  }, [loadedDropletsTexture]);
-
-  useLayoutEffect(() => {
-    baseObj.traverse((child) => {
-      if (!child.isMesh) return;
-      child.material = new THREE.MeshStandardMaterial({
-        map: texture,
-        metalness: 0.65,
-        roughness: 0.2,
-        envMapIntensity: 2,
-      });
-      child.castShadow = true;
-      child.receiveShadow = true;
-    });
-
-    overlayObj.traverse((child) => {
-      if (!child.isMesh) return;
-      child.material = new THREE.MeshPhysicalMaterial({
-        normalMap: dropletsTexture,
-        normalScale: new THREE.Vector2(0.55, 0.55),
-        metalness: 0.2,
-        roughness: 0.12,
-        clearcoat: 1,
-        clearcoatRoughness: 0.1,
-        transmission: 0.2,
-        transparent: true,
-        opacity: 0.36,
-        envMapIntensity: 1.4,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
-      });
-      child.castShadow = false;
-      child.receiveShadow = false;
-    });
-  }, [baseObj, overlayObj, dropletsTexture, texture]);
-
-  useFrame((state) => {
-    dropletsTexture.offset.y -= 0.00035;
-    dropletsTexture.offset.x = Math.sin(state.clock.elapsedTime * 0.2) * 0.01;
-
-    if (!meshRef.current) return;
-
-    if (arSessionActive) {
-      const targetPosition = arPosition ?? [0, -0.2, -1.1];
-      meshRef.current.position.set(targetPosition[0], targetPosition[1], targetPosition[2]);
-      meshRef.current.rotation.set(0, arRotationY, 0);
-      meshRef.current.scale.setScalar(arScale);
-      return;
-    }
-
-    const targetY = active ? 0.32 : 0;
-    const targetRotX = active ? Math.sin(state.clock.elapsedTime * 6) * 0.03 : 0;
-    const targetRotY = active ? state.clock.elapsedTime * 0.8 : state.clock.elapsedTime * 0.45;
-    const targetScale = active ? 1.08 : 1;
-
-    meshRef.current.position.y = THREE.MathUtils.lerp(meshRef.current.position.y, targetY, 0.06);
-    meshRef.current.rotation.x = THREE.MathUtils.lerp(meshRef.current.rotation.x, targetRotX, 0.1);
-    meshRef.current.rotation.y = THREE.MathUtils.lerp(meshRef.current.rotation.y, targetRotY, 0.035);
-    meshRef.current.scale.setScalar(
-      THREE.MathUtils.lerp(meshRef.current.scale.x, targetScale, active ? 0.08 : 0.05),
-    );
-  });
-
-  return (
-    <Float speed={1.8} rotationIntensity={0.08} floatIntensity={0.3} floatingRange={[-0.15, 0.15]}>
-      <group
-        ref={meshRef}
-        position={[0, 0, 0]}
-        onClick={onClick}
-        onPointerDown={onClick}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            onClick();
-          }
-        }}
-      >
-        <primitive object={baseObj} scale={2.6} />
-        <primitive object={overlayObj} scale={2.62} />
-        <mesh position={[0, -2.0, 0]} visible={!arSessionActive || arPlaced}>
-          <circleGeometry args={[0.9, 42]} />
-          <meshBasicMaterial color={active ? "#5c0000" : "#0b0b0b"} transparent opacity={active ? 0.35 : 0.22} />
-        </mesh>
-      </group>
-    </Float>
-  );
-}
-
-const modalVariants = {
-  hidden: { opacity: 0, scale: 0.96 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.25 } },
-  exit: { opacity: 0, scale: 0.97, transition: { duration: 0.18 } },
-};
-
-const WantedModal = ({ onClose }) => (
-  <Motion.div
-    className="wanted-backdrop"
-    variants={modalVariants}
-    initial="hidden"
-    animate="visible"
-    exit="exit"
-    onClick={onClose}
-  >
-    <Motion.div className="wanted-modal" onClick={(event) => event.stopPropagation()}>
-      <p className="wanted-tag">Wanted poster</p>
-      <h2>WANTED</h2>
-      <p className="wanted-sub">DEAD OR ALIVE</p>
-      <div className="wanted-photo">Você</div>
-      <p className="wanted-name">Pirata Lendário</p>
-      <p className="wanted-bounty">฿ 3.000.000.000</p>
-      <button onClick={onClose} className="btn btn-secondary">
-        Fechar
-      </button>
-    </Motion.div>
-  </Motion.div>
-);
-
-function chapterScroll(id) {
-  const target = document.getElementById(id);
-  if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
-}
+const CHAPTERS = ["Hero", "Narrativa", "Colecionável", "Making Of"];
 
 export default function App() {
-  const [active, setActive] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [hakiTrigger, setHakiTrigger] = useState(0);
-  const [paperTrigger, setPaperTrigger] = useState(0);
-  const [hasSunnyModel, setHasSunnyModel] = useState(false);
-  const [userHasInteracted, setUserHasInteracted] = useState(false);
-  const [muted, setMuted] = useState(() => readMutePreference());
-
-  const [arSupported, setArSupported] = useState(false);
-  const [arSupportChecked, setArSupportChecked] = useState(false);
-  const [arRequested, setArRequested] = useState(false);
-  const [arSessionActive, setArSessionActive] = useState(false);
-  const [arScale, setArScale] = useState(1);
-  const [arRotationY, setArRotationY] = useState(0);
-  const [arPlaced, setArPlaced] = useState(false);
-  const [arHitPose, setArHitPose] = useState(null);
-  const [arAnchorPosition, setArAnchorPosition] = useState(null);
-
-  const [toast, setToast] = useState("");
-  const [showTooltip, setShowTooltip] = useState(false);
-
   const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
+  const [introSeen] = useState(() => localStorage.getItem("intro_seen") === "1");
+  const [introStarted, setIntroStarted] = useState(demoMode || introSeen);
+  const [introActive, setIntroActive] = useState(!(demoMode && introSeen));
+  const [introProgress, setIntroProgress] = useState(0);
+  const [forceLongIntro, setForceLongIntro] = useState(false);
+
+  const [hakiPulseActive, setHakiPulseActive] = useState(false);
+  const hakiCountRef = useRef(Number(localStorage.getItem("haki_count") ?? 0));
+  const [toast, setToast] = useState("");
+  const [canHovered, setCanHovered] = useState(false);
+  const [firstDragDone, setFirstDragDone] = useState(false);
+  const [showTurnHint, setShowTurnHint] = useState(false);
+
+  const [onboardingSeen, setOnboardingSeen] = useState(() => localStorage.getItem("onboarding_seen") === "1");
+  const [onboardingVisible, setOnboardingVisible] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+
+  const [collectible, setCollectible] = useState(() => {
+    const saved = localStorage.getItem("collectible_item");
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [collectibleOpen, setCollectibleOpen] = useState(false);
+  const [uiSafeArea, setUiSafeArea] = useState(true);
+
+  const [activeChapter, setActiveChapter] = useState(1);
+  const [muted, setMuted] = useState(true);
+  const [interacted, setInteracted] = useState(false);
+  const chapterSfxRef = useRef(null);
 
   useEffect(() => {
-    const cleanup = listenForFirstInteraction(() => {
-      setUserHasInteracted(true);
-    });
-
-    fetch("/models/thousand_sunny.glb", { method: "HEAD" })
-      .then((response) => setHasSunnyModel(response.ok))
-      .catch(() => setHasSunnyModel(false));
-
-    const checkArSupport = async () => {
-      if (!navigator.xr) {
-        setArSupported(false);
-        setArSupportChecked(true);
-        return;
-      }
-
-      const supported = await navigator.xr.isSessionSupported("immersive-ar").catch(() => false);
-      setArSupported(Boolean(supported));
-      setArSupportChecked(true);
+    document.body.style.overflow = introActive ? "hidden" : "auto";
+    return () => {
+      document.body.style.overflow = "auto";
     };
-
-    checkArSupport();
-
-    const hasSeenTooltip = localStorage.getItem("coca-onepiece-tooltip-seen") === "1";
-    if (demoMode || !hasSeenTooltip) {
-      setShowTooltip(true);
-      const timeout = setTimeout(() => {
-        setShowTooltip(false);
-        localStorage.setItem("coca-onepiece-tooltip-seen", "1");
-      }, 6000);
-      return () => {
-        clearTimeout(timeout);
-        cleanup();
-      };
-    }
-
-    return cleanup;
-  }, [demoMode]);
+  }, [introActive]);
 
   useEffect(() => {
-    if (!toast) return undefined;
-    const timeout = setTimeout(() => setToast(""), 2600);
-    return () => clearTimeout(timeout);
-  }, [toast]);
-
-  const toggleMute = () => {
-    setMuted((prev) => {
-      const next = !prev;
-      persistMutePreference(next);
-      return next;
-    });
-  };
-
-  const handleCanClick = () => {
-    setUserHasInteracted(true);
-    setActive((prev) => !prev);
-    setHakiTrigger((prev) => prev + 1);
-  };
-
-  const handleOpenModal = () => {
-    setModalOpen(true);
-    setPaperTrigger((prev) => prev + 1);
-  };
-
-  const onSessionStateChange = useCallback((activeState) => {
-    setArSessionActive(activeState);
-    if (!activeState) {
-      setArRequested(false);
-      setArPlaced(false);
-      setArHitPose(null);
-      setArAnchorPosition(null);
-    }
+    const onFirst = () => setInteracted(true);
+    window.addEventListener("pointerdown", onFirst, { once: true });
+    return () => window.removeEventListener("pointerdown", onFirst);
   }, []);
 
-  const onHitPose = useCallback(
-    (hitPose) => {
-      setArHitPose(hitPose);
-      if (!arPlaced && hitPose?.position) {
-        setArAnchorPosition(hitPose.position);
+  useEffect(() => {
+    chapterSfxRef.current = new Audio("/audio/paper_unroll.mp3");
+    chapterSfxRef.current.volume = 0.2;
+    return () => chapterSfxRef.current?.pause();
+  }, []);
+
+  useEffect(() => {
+    if (demoMode) return;
+    if (onboardingSeen || introActive) return;
+
+    const kickoff = setTimeout(() => {
+      setOnboardingVisible(true);
+      setOnboardingStep(0);
+    }, 0);
+
+    const timers = [
+      kickoff,
+      setTimeout(() => setOnboardingStep(1), 2500),
+      setTimeout(() => setOnboardingStep(2), 5200),
+      setTimeout(() => {
+        setOnboardingVisible(false);
+        localStorage.setItem("onboarding_seen", "1");
+        setOnboardingSeen(true);
+      }, 8000),
+    ];
+
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, [demoMode, introActive, onboardingSeen]);
+
+  useEffect(() => {
+    if (collectible) return;
+    const timer = setTimeout(() => {
+      const id = Math.random().toString(36).slice(2, 8).toUpperCase();
+      const item = { id, unlockedAt: new Date().toISOString(), name: "Stamp Grand Line" };
+      setCollectible(item);
+      localStorage.setItem("collectible_item", JSON.stringify(item));
+      setToast("Você desbloqueou um item");
+    }, 20000);
+    return () => clearTimeout(timer);
+  }, [collectible]);
+
+  useEffect(() => {
+    const sections = document.querySelectorAll("[data-chapter]");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const idx = Number(entry.target.getAttribute("data-chapter") || "1");
+          setActiveChapter(idx);
+          if (interacted && !muted) {
+            chapterSfxRef.current.currentTime = 0;
+            chapterSfxRef.current.play().catch(() => {});
+          }
+        });
+      },
+      { threshold: 0.6 },
+    );
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  }, [interacted, muted]);
+
+  useEffect(() => {
+    if (!introActive || !introStarted) return;
+    const durationMs = introSeen && !forceLongIntro ? 1500 : 10000;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now) => {
+      const p = Math.min((now - start) / durationMs, 1);
+      setIntroProgress(p);
+      if (p < 1) {
+        raf = requestAnimationFrame(tick);
+        return;
       }
-    },
-    [arPlaced],
-  );
+      localStorage.setItem("intro_seen", "1");
+      setIntroActive(false);
+      setForceLongIntro(false);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [forceLongIntro, introActive, introSeen, introStarted]);
 
-  const handleArSelect = useCallback(() => {
-    if (arPlaced || !arHitPose?.position) return;
-    setArAnchorPosition(arHitPose.position);
-    setArPlaced(true);
-  }, [arHitPose, arPlaced]);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 2200);
+    return () => clearTimeout(t);
+  }, [toast]);
 
-  const handleArClick = async () => {
-    setUserHasInteracted(true);
-    if (!arSupportChecked) return;
+  useEffect(() => {
+    if (!canHovered) return;
+    document.body.style.cursor = "grab";
+    return () => {
+      document.body.style.cursor = "default";
+    };
+  }, [canHovered]);
 
-    if (!arSupported) {
-      const currentUrl = window.location.href;
-      try {
-        await navigator.clipboard.writeText(currentUrl);
-        setToast("Link copiado. Abra no celular.");
-      } catch {
-        setToast("Copie este link e abra no celular.");
-      }
-      return;
+  const triggerHaki = useCallback(() => {
+    setInteracted(true);
+    setHakiPulseActive(true);
+    hakiCountRef.current += 1;
+    localStorage.setItem("haki_count", String(hakiCountRef.current));
+    if (hakiCountRef.current >= 3 && !collectible) {
+      const item = {
+        id: Math.random().toString(36).slice(2, 8).toUpperCase(),
+        unlockedAt: new Date().toISOString(),
+        name: "Wanted Ticket: Straw Hat Edition",
+      };
+      setCollectible(item);
+      localStorage.setItem("collectible_item", JSON.stringify(item));
+      setToast("Você desbloqueou um item");
     }
+    setToast("Haki ativado");
+    setTimeout(() => setHakiPulseActive(false), 2500);
+  }, [collectible]);
 
-    setArPlaced(false);
-    setArAnchorPosition(null);
-    setArRequested(true);
-  };
+  const dismissOnboardingForever = useCallback(() => {
+    setOnboardingVisible(false);
+    setOnboardingSeen(true);
+    localStorage.setItem("onboarding_seen", "1");
+  }, []);
 
-  const handleCopyEmail = async () => {
-    try {
-      await navigator.clipboard.writeText("portfolio@example.com");
-      setToast("Email copiado.");
-    } catch {
-      setToast("Não foi possível copiar o email.");
-    }
-  };
+  const copyCollectibleText = useCallback(() => {
+    if (!collectible) return;
+    const txt = `${collectible.name} | ID ${collectible.id} | ${new Date(collectible.unlockedAt).toLocaleString("pt-BR")}`;
+    navigator.clipboard.writeText(txt).then(() => setToast("Texto copiado"));
+  }, [collectible]);
 
-  const githubUrl = "https://github.com";
+  const copyDemoLink = useCallback(() => {
+    const url = `${window.location.origin}${window.location.pathname}?demo=1`;
+    navigator.clipboard.writeText(url).then(() => setToast("Link demo copiado"));
+  }, []);
+
+  const replayIntro = useCallback(() => {
+    setIntroStarted(true);
+    setIntroActive(true);
+    setIntroProgress(0);
+    setForceLongIntro(true);
+  }, []);
 
   return (
-    <div className="app-shell">
-      <div className="stage-layer" aria-hidden="true">
-        <Canvas shadows camera={{ position: [0, 0, 6], fov: 40 }} gl={{ alpha: true }}>
-          <Suspense fallback={<WaveLoader />}>
-            <XRExperience
-              arRequested={arRequested}
-              onSessionStateChange={onSessionStateChange}
-              onHitPose={onHitPose}
-              onSelect={handleArSelect}
-            />
-            <DynamicLights active={active} />
-            <Environment preset="city" />
-            <AudioController
-              muted={muted}
-              userHasInteracted={userHasInteracted}
-              hakiTrigger={hakiTrigger}
-              paperTrigger={paperTrigger}
-            />
-            <CameraShake
-              maxYaw={active ? 0.05 : 0}
-              maxPitch={active ? 0.05 : 0}
-              maxRoll={active ? 0.05 : 0}
-              yawFrequency={active ? 0.5 : 0}
-              pitchFrequency={active ? 0.5 : 0}
-              rollFrequency={active ? 0.5 : 0}
-              intensity={1}
-            />
-            <GearSecondSteam active={active} />
-            <ThousandSunny hasModel={hasSunnyModel} />
-            {active && (
-              <>
-                <Sparkles count={120} scale={8} size={12} speed={4.2} opacity={1} color="black" position={[0, 0, 1]} noise={3} />
-                <Sparkles count={65} scale={7} size={9} speed={3.8} opacity={1} color="#ff0000" position={[0, 0, 1]} noise={2} />
-              </>
-            )}
-            <Sparkles count={34} scale={10} size={3} speed={0.4} opacity={0.5} color="#ffd700" position={[0, -2, 0]} />
-            <RealCan
-              active={active}
-              onClick={handleCanClick}
-              arSessionActive={arSessionActive}
-              arScale={arScale}
-              arRotationY={arRotationY}
-              arPosition={arAnchorPosition}
-              arPlaced={arPlaced}
-            />
-            <ContactShadows position={[0, -2.5, 0]} opacity={0.6} scale={10} blur={2.5} far={4} />
-            <OrbitControls
-              enableZoom={false}
-              enablePan={false}
-              enableDamping
-              dampingFactor={0.05}
-              rotateSpeed={0.45}
-              autoRotate={!active && !arSessionActive}
-              autoRotateSpeed={0.5}
-              minPolarAngle={Math.PI / 3.2}
-              maxPolarAngle={Math.PI / 1.42}
-            />
-          </Suspense>
+    <div className={`app-shell ${uiSafeArea ? "safe-area" : ""}`}>
+      <div className="bg-layer" />
+
+      <div className="canvas-layer">
+        <Canvas camera={{ position: [0, 0.5, 6], fov: 42 }} shadows>
+          <Loader />
+          <Scene
+            introActive={introActive}
+            introProgress={introProgress}
+            hakiPulseActive={hakiPulseActive}
+            onHaki={triggerHaki}
+            onHover={setCanHovered}
+            onDragged={() => {
+              if (!firstDragDone) {
+                setFirstDragDone(true);
+                setShowTurnHint(true);
+                setTimeout(() => setShowTurnHint(false), 2000);
+              }
+            }}
+            firstDragDone={showTurnHint}
+          />
         </Canvas>
       </div>
 
-      <div className="stage-overlays" aria-hidden="true" />
+      <div className="ui-overlay pointer-none">
+        <header className="top-ui pointer-auto">
+          <span className="badge">Coca-Cola x One Piece</span>
+          {demoMode && <span className="badge demo">DEMO MODE</span>}
+          <button type="button" className="btn btn-ghost" onClick={() => setMuted((v) => !v)}>
+            {muted ? "Som off" : "Som on"}
+          </button>
+        </header>
 
-      <main className="story-layer">
-        <section id="hero" className="chapter hero" aria-label="Hero">
-          <Motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="hero-content"
-          >
-            <p className="kicker">Experiência interativa</p>
-            <h1>Sabor Lendário</h1>
-            <p className="subtitle">
-              Experiência 3D interativa inspirada em aventura e colecionáveis.
-            </p>
-            <p className="microcopy">
-              Arraste para girar. Clique na lata para ativar o modo Haki.
-            </p>
-            <div className="hero-ctas">
-              <button className="btn btn-primary" onClick={() => chapterScroll("interacao")}>
-                Explorar agora
-              </button>
-              <button className="btn btn-ghost" onClick={() => chapterScroll("making-of")}>
-                Ver making of
-              </button>
+        <main className="story">
+          <section className="chapter hero" data-chapter="1">
+            <Motion.h1 initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }}>
+              Portfólio vivo: Grand Line Edition
+            </Motion.h1>
+            <p>Direção visual 3D, WebXR e microinterações para uma experiência compartilhável.</p>
+            <div className="row pointer-auto">
+              <Motion.button whileHover={{ y: -2, scale: 1.02 }} className="btn btn-primary">
+                Explorar capítulos
+              </Motion.button>
+              <Motion.a whileHover={{ y: -2 }} className="btn btn-ghost" href={`mailto:${CONTACT_EMAIL}`}>
+                Contato
+              </Motion.a>
             </div>
-          </Motion.div>
+            {canHovered && <div className="mini-tooltip">Clique para Haki</div>}
+          </section>
 
-          <div className="hero-controls" aria-label="Controles">
-            <button onClick={toggleMute} className="control-chip" aria-label="Alternar som">
-              Som: {muted ? "Off" : "On"}
-            </button>
-            <ARButton
-              arSupported={arSupported}
-              arSupportChecked={arSupportChecked}
-              arSessionActive={arSessionActive}
-              onClick={handleArClick}
-            />
-            <button onClick={handleOpenModal} className="control-chip control-chip-secondary">
-              Easter egg
-            </button>
-          </div>
-
-          <AnimatePresence>
-            {showTooltip && (
-              <Motion.div
-                className="tooltip-guide"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-              >
-                <p>Arraste para girar</p>
-                <p>Clique na lata para ativar</p>
-              </Motion.div>
-            )}
-          </AnimatePresence>
-
-          {demoMode && (
-            <aside className="demo-mode" aria-label="Roteiro demo">
-              <strong>DEMO MODE</strong>
-              <ol>
-                <li>Apresente a hero e arraste a lata.</li>
-                <li>Clique na lata para ativar Haki.</li>
-                <li>Mostre AR no celular com link copiado.</li>
-              </ol>
-            </aside>
-          )}
-        </section>
-
-        <section id="interacao" className="chapter panel" aria-label="Como interagir">
-          <Motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }}>
-            <h2>Como interagir</h2>
-            <div className="cards-grid">
-              <article className="info-card"><h3>Gire a lata (arraste)</h3><p>Use toque ou mouse para explorar a peça em tempo real.</p></article>
-              <article className="info-card"><h3>Clique para ativar efeito</h3><p>Ative o modo Haki e veja partículas, vapor e luz cinemática.</p></article>
-              <article className="info-card"><h3>Veja em AR no celular</h3><p>Abra em um dispositivo móvel para projetar a cena no ambiente.</p></article>
-            </div>
-          </Motion.div>
-        </section>
-
-        <section id="making-of" className="chapter panel" aria-label="Como foi feito">
-          <Motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }}>
-            <h2>Como foi feito</h2>
-            <p className="stack">React + Three.js (R3F/drei) · WebXR · WebAudio gate</p>
-            <ul className="bullet-list">
-              <li>Performance: lazy load, assets controlados e fallback elegante.</li>
-              <li>Stage sticky com narrativa curta para leitura focada.</li>
-              <li>UI premium com overlays, contraste e estados acessíveis.</li>
+          <section className="chapter panel" data-chapter="2">
+            <h2>Narrativa interativa</h2>
+            <ul>
+              <li>Intro em 3 fases com progressão cinematográfica (8–12s).</li>
+              <li>Lata fixa com giro lento, textura molhada e pulse temporal de Haki.</li>
+              <li>Thousand Sunny em loop horizontal contínuo atrás da lata.</li>
             </ul>
-          </Motion.div>
-        </section>
+          </section>
 
-        <section id="contato" className="chapter panel" aria-label="Contato">
-          <Motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }}>
-            <h2>Contato</h2>
-            <div className="contact-actions">
-              <a className="btn btn-ghost" href={githubUrl} target="_blank" rel="noreferrer">GitHub</a>
-              <a className="btn btn-ghost" href="#">LinkedIn</a>
-              <a className="btn btn-ghost" href="mailto:portfolio@example.com">Email</a>
-              <button className="btn btn-secondary" onClick={handleCopyEmail}>Copiar email</button>
+          <section className="chapter panel" data-chapter="3">
+            <h2>Colecionável</h2>
+            <p>Ative Haki 3x ou permaneça 20s para desbloquear o item premium.</p>
+            <div className="row pointer-auto">
+              <button type="button" className="btn btn-secondary" disabled={!collectible} onClick={() => setCollectibleOpen(true)}>
+                Ver colecionável
+              </button>
             </div>
-          </Motion.div>
-        </section>
+          </section>
 
-        <footer className="chapter footer">
-          <p>Projeto conceitual para portfólio. Não afiliado. Marcas pertencem aos seus donos.</p>
-        </footer>
-      </main>
+          <section className="chapter panel" data-chapter="4">
+            <h2>Making Of</h2>
+            <p>Stack: React 19, R3F/drei, Framer Motion, WebXR-ready.</p>
+            <ul>
+              <li>Camadas separadas para background, canvas, overlays e UI.</li>
+              <li>Onboarding guiado persistido em localStorage.</li>
+              <li>Modo demo com controles rápidos para apresentação.</li>
+            </ul>
+            <div className="row pointer-auto">
+              <button type="button" className="btn btn-primary" onClick={replayIntro}>
+                Rever abertura
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={copyDemoLink}>
+                Copiar link demo
+              </button>
+            </div>
+          </section>
+        </main>
+      </div>
 
-      {arSessionActive && arPlaced && (
-        <div className="ar-adjustments">
-          <p>Ajustes AR</p>
-          <label>
-            Escala
-            <input
-              type="range"
-              min="0.6"
-              max="1.7"
-              step="0.05"
-              value={arScale}
-              onChange={(e) => setArScale(Number(e.target.value))}
-            />
-          </label>
-          <label>
-            Rotação
-            <input
-              type="range"
-              min={-Math.PI}
-              max={Math.PI}
-              step="0.05"
-              value={arRotationY}
-              onChange={(e) => setArRotationY(Number(e.target.value))}
-            />
-          </label>
+      <div className="chapter-indicator">{activeChapter}/{CHAPTERS.length}</div>
+
+      {demoMode && (
+        <div className="demo-panel pointer-auto">
+          <button type="button" className="btn" onClick={replayIntro}>Play Intro</button>
+          <button type="button" className="btn" onClick={triggerHaki}>Trigger Haki</button>
+          <button type="button" className="btn" onClick={copyDemoLink}>Show AR (copy link)</button>
+          <button type="button" className="btn" onClick={() => setUiSafeArea((v) => !v)}>Toggle UI safe area</button>
+        </div>
+      )}
+
+      {introActive && (
+        <IntroOverlay
+          introStarted={introStarted}
+          introProgress={introProgress}
+          isShortVersion={introSeen && !forceLongIntro}
+          onStart={() => {
+            setInteracted(true);
+            setIntroStarted(true);
+          }}
+          onSkip={() => {
+            localStorage.setItem("intro_seen", "1");
+            setIntroActive(false);
+            setIntroStarted(true);
+          }}
+        />
+      )}
+
+      <OnboardingOverlay visible={onboardingVisible} stepIndex={onboardingStep} onDismissForever={dismissOnboardingForever} />
+
+      {collectibleOpen && collectible && (
+        <div className="modal-backdrop pointer-auto" onClick={() => setCollectibleOpen(false)}>
+          <div className="collectible-card" onClick={(e) => e.stopPropagation()}>
+            <p className="kicker">Unlocked collectible</p>
+            <h3>{collectible.name}</h3>
+            <p>ID #{collectible.id}</p>
+            <p>{new Date(collectible.unlockedAt).toLocaleString("pt-BR")}</p>
+            <div className="row">
+              <button type="button" className="btn btn-primary" onClick={copyCollectibleText}>Copiar texto</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setCollectibleOpen(false)}>Fechar</button>
+            </div>
+          </div>
         </div>
       )}
 
       {toast && <div className="toast">{toast}</div>}
-
-      <AnimatePresence>
-        {modalOpen && <WantedModal onClose={() => setModalOpen(false)} />}
-      </AnimatePresence>
     </div>
   );
 }
