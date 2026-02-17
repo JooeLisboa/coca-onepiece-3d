@@ -1,41 +1,51 @@
-import React, { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
 const MODEL_URL = "/models/thousand_sunny.glb";
 
-function BoatRig({ object, mode, progress, scale }) {
-  const root = useRef();
+const expoOut = (t) => (t === 1 ? 1 : 1 - 2 ** (-10 * t));
+const smoothstep = (t) => t * t * (3 - 2 * t);
+
+function BoatRig({ object, mode, progress, onIntroDone, scale = 0.6 }) {
+  const ref = useRef();
+  const introDoneRef = useRef(false);
 
   useFrame((state) => {
-    if (!root.current) return;
+    if (!ref.current) return;
     const t = state.clock.elapsedTime;
 
     if (mode === "intro") {
       const p = THREE.MathUtils.clamp(progress, 0, 1);
-      const z = THREE.MathUtils.lerp(-120, 10, p);
-      const x = THREE.MathUtils.lerp(-8, 6, p);
-      root.current.position.set(x, -1.1 + Math.sin(p * Math.PI) * 0.2, z);
-      root.current.rotation.set(0, THREE.MathUtils.lerp(-0.35, 0.42, p), 0);
+      const eased = expoOut(smoothstep(p));
+      const z = THREE.MathUtils.lerp(-25, 8, eased);
+      const x = THREE.MathUtils.lerp(-10, 8, eased);
+      ref.current.position.set(x, -1.1 + Math.sin(eased * Math.PI) * 0.2, z);
+      ref.current.rotation.set(0, THREE.MathUtils.lerp(-0.28, 0.38, eased), 0);
+
+      if (p >= 1 && !introDoneRef.current) {
+        introDoneRef.current = true;
+        onIntroDone?.();
+      }
       return;
     }
 
+    introDoneRef.current = false;
     const cycle = ((t % 24) / 24) * 2;
-    const pingPong = cycle <= 1 ? cycle : 2 - cycle;
-    const x = THREE.MathUtils.lerp(-10, 10, pingPong);
-    root.current.position.set(x, -1.42 + Math.sin(t * 0.7) * 0.1, -14);
-    root.current.rotation.set(0, (cycle <= 1 ? -0.32 : 0.32) + Math.sin(t * 0.45) * 0.08, 0);
+    const ping = cycle <= 1 ? cycle : 2 - cycle;
+    ref.current.position.set(THREE.MathUtils.lerp(-10, 10, ping), -1.35 + Math.sin(t * 0.8) * 0.09, -6.5);
+    ref.current.rotation.set(0, (cycle <= 1 ? -0.22 : 0.22) + Math.sin(t * 0.45) * 0.06, 0);
   });
 
   return (
-    <group ref={root} scale={scale}>
+    <group ref={ref} scale={scale}>
       {object}
     </group>
   );
 }
 
-function ThousandSunnyModel({ mode, progress }) {
+function Model({ mode, progress, onIntroDone }) {
   const gltf = useGLTF(MODEL_URL);
   const scene = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
 
@@ -48,23 +58,23 @@ function ThousandSunnyModel({ mode, progress }) {
       child.material = child.material.clone();
       child.material.roughness = 0.62;
       child.material.metalness = 0.12;
-      child.material.color?.multiply(new THREE.Color("#a9bed7"));
     });
   }, [scene]);
 
-  return <BoatRig object={<primitive object={scene} />} mode={mode} progress={progress} scale={0.62} />;
+  return <BoatRig object={<primitive object={scene} />} mode={mode} progress={progress} onIntroDone={onIntroDone} />;
 }
 
-function ThousandSunnyFallback({ mode, progress }) {
+function Fallback({ mode, progress, onIntroDone }) {
   return (
     <BoatRig
       mode={mode}
       progress={progress}
+      onIntroDone={onIntroDone}
       scale={0.7}
       object={
         <mesh>
           <boxGeometry args={[1.6, 0.4, 0.5]} />
-          <meshStandardMaterial color="#4c6788" roughness={0.7} />
+          <meshStandardMaterial color="#56718f" roughness={0.7} />
         </mesh>
       }
     />
@@ -72,27 +82,16 @@ function ThousandSunnyFallback({ mode, progress }) {
 }
 
 export default function ThousandSunny({ hasModel = true, mode = "loop", progress = 0, onIntroDone }) {
-  const introDoneSent = useRef(false);
-
   useEffect(() => {
     if (hasModel) useGLTF.preload(MODEL_URL);
   }, [hasModel]);
 
-  useEffect(() => {
-    if (mode !== "intro") {
-      introDoneSent.current = false;
-      return;
-    }
-    if (progress >= 1 && !introDoneSent.current) {
-      introDoneSent.current = true;
-      onIntroDone?.();
-    }
-  }, [mode, onIntroDone, progress]);
+  if (!hasModel) return <Fallback mode={mode} progress={progress} onIntroDone={onIntroDone} />;
 
   if (!hasModel) return <ThousandSunnyFallback mode={mode} progress={progress} />;
   return (
-    <Suspense fallback={<ThousandSunnyFallback mode={mode} progress={progress} />}>
-      <ThousandSunnyModel mode={mode} progress={progress} />
+    <Suspense fallback={<Fallback mode={mode} progress={progress} onIntroDone={onIntroDone} />}>
+      <Model mode={mode} progress={progress} onIntroDone={onIntroDone} />
     </Suspense>
   );
 }

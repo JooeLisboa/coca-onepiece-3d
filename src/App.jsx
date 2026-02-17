@@ -1,390 +1,234 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Environment, OrbitControls, Sparkles, ContactShadows, Html, useProgress } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { CameraShake, Cloud, ContactShadows, Environment, Html, OrbitControls, Sparkles, useProgress } from "@react-three/drei";
 import { motion } from "framer-motion";
+
+const Motion = motion;
 import * as THREE from "three";
 import ThousandSunny from "./components/ThousandSunny";
 import RealCan from "./components/RealCan";
 import IntroOverlay from "./components/IntroOverlay";
-import OnboardingOverlay from "./components/OnboardingOverlay";
+import FooterDock from "./components/FooterDock";
 import "./App.css";
 
-const Motion = motion;
-const CONTACT_EMAIL = "crew@grandline-coke.studio";
-
-function Loader() {
+function SceneLoader() {
   const { progress } = useProgress();
   return (
     <Html center>
-      <div className="loader">Carregando {progress.toFixed(0)}%</div>
+      <div className="loader">Carregando assets {progress.toFixed(0)}%</div>
     </Html>
   );
 }
 
-function Scene({
-  introActive,
-  introProgress,
-  hakiPulseActive,
-  onHaki,
-  onHover,
-  onDragged,
-  firstDragDone,
-}) {
+function HakiRing({ active }) {
+  const ref = useRef();
+
+  useFrame((_, delta) => {
+    if (!ref.current) return;
+    const targetScale = active ? 2.2 : 0.1;
+    const targetOpacity = active ? 0.7 : 0;
+    ref.current.scale.x = THREE.MathUtils.lerp(ref.current.scale.x, targetScale, active ? 0.15 : 0.25);
+    ref.current.scale.y = THREE.MathUtils.lerp(ref.current.scale.y, targetScale, active ? 0.15 : 0.25);
+    ref.current.material.opacity = THREE.MathUtils.lerp(ref.current.material.opacity, targetOpacity, 0.2);
+    ref.current.rotation.z += delta * 0.6;
+  });
+
+  return (
+    <mesh ref={ref} position={[1.6, -0.25, -0.6]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.65, 0.95, 64]} />
+      <meshStandardMaterial color="#ff4d52" emissive="#d9202f" emissiveIntensity={1.2} transparent opacity={0} />
+    </mesh>
+  );
+}
+
+function Stage({ introDone, introProgress, hakiPulse, canHovered, onCanHover, onCanClick, onIntroDone, onDragStart }) {
   return (
     <>
-      <color attach="background" args={["#04070d"]} />
-      <ambientLight intensity={hakiPulseActive ? 0.55 : 0.35} />
-      <directionalLight position={[3, 5, 4]} intensity={hakiPulseActive ? 2.2 : 1.2} color={hakiPulseActive ? "#ffd39f" : "#ffffff"} />
-      <directionalLight position={[-6, 3, -6]} intensity={hakiPulseActive ? 1.1 : 0.4} color="#5b8dc7" />
+      <ambientLight intensity={hakiPulse ? 0.55 : 0.34} />
+      <directionalLight position={[3, 4, 3]} intensity={hakiPulse ? 2.8 : 1.4} color={hakiPulse ? "#ffd0a3" : "#ffffff"} />
+      <directionalLight position={[-5, 3, -3]} intensity={hakiPulse ? 1.4 : 0.5} color="#6ba5ff" />
 
-      <ThousandSunny mode={introActive ? "intro" : "loop"} progress={introProgress} onIntroDone={() => {}} />
+      <ThousandSunny mode={introDone ? "loop" : "intro"} progress={introProgress} onIntroDone={onIntroDone} />
+      <RealCan hakiPulse={hakiPulse} hovered={canHovered} onHoverChange={onCanHover} onClick={onCanClick} />
 
-      <group position={[0, 0, 0]}>
-        <RealCan hakiPulseActive={hakiPulseActive} onClick={onHaki} onHoverChange={onHover} />
-      </group>
-
-      <Sparkles count={hakiPulseActive ? 180 : 70} scale={[8, 4, 8]} size={hakiPulseActive ? 2.8 : 1.2} speed={hakiPulseActive ? 1.2 : 0.45} color={hakiPulseActive ? "#ffedca" : "#ffe5c3"} />
-      <ContactShadows position={[0, -1.55, 0]} opacity={0.4} blur={2.8} scale={12} />
+      <Sparkles count={hakiPulse ? 210 : 70} scale={[10, 5, 10]} size={hakiPulse ? 3 : 1.1} speed={hakiPulse ? 1.35 : 0.45} color={hakiPulse ? "#ffca6d" : "#ffd9ac"} />
+      <Cloud position={[1.6, -0.6, -1.2]} opacity={hakiPulse ? 0.32 : 0.09} speed={hakiPulse ? 0.95 : 0.35} width={2.8} depth={0.8} color={hakiPulse ? "#ff6b5e" : "#a9b6ca"} />
+      <HakiRing active={hakiPulse} />
+      <ContactShadows position={[1.6, -1.62, -0.6]} opacity={0.4} scale={7} blur={2.8} />
       <Environment preset="sunset" />
+      <CameraShake yawFrequency={hakiPulse ? 1.1 : 0} pitchFrequency={hakiPulse ? 1.1 : 0} rollFrequency={hakiPulse ? 0.5 : 0} yawAmplitude={hakiPulse ? 0.02 : 0} pitchAmplitude={hakiPulse ? 0.015 : 0} rollAmplitude={hakiPulse ? 0.01 : 0} />
 
-      <OrbitControls
-        enableZoom={false}
-        minPolarAngle={Math.PI / 2.4}
-        maxPolarAngle={Math.PI / 1.8}
-        minAzimuthAngle={-0.8}
-        maxAzimuthAngle={0.8}
-        onStart={() => onDragged()}
-      />
-
-      {firstDragDone && (
-        <Html position={[0, -0.1, 1.2]} center>
-          <div className="drag-hint">Girar</div>
-        </Html>
+      {introDone && (
+        <OrbitControls
+          enableZoom={false}
+          minPolarAngle={Math.PI / 2.45}
+          maxPolarAngle={Math.PI / 1.75}
+          minAzimuthAngle={-0.9}
+          maxAzimuthAngle={0.9}
+          onStart={onDragStart}
+        />
       )}
     </>
   );
 }
 
-const CHAPTERS = ["Hero", "Narrativa", "Colecionável", "Making Of"];
-
 export default function App() {
-  const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
-  const [introSeen] = useState(() => localStorage.getItem("intro_seen") === "1");
-  const [introStarted, setIntroStarted] = useState(demoMode || introSeen);
-  const [introActive, setIntroActive] = useState(!(demoMode && introSeen));
+  const introSeen = useMemo(() => localStorage.getItem("intro_seen") === "1", []);
+  const [introStarted, setIntroStarted] = useState(introSeen);
+  const [introDone, setIntroDone] = useState(introSeen);
   const [introProgress, setIntroProgress] = useState(0);
-  const [forceLongIntro, setForceLongIntro] = useState(false);
+  const [forceReplay, setForceReplay] = useState(false);
 
-  const [hakiPulseActive, setHakiPulseActive] = useState(false);
-  const hakiCountRef = useRef(Number(localStorage.getItem("haki_count") ?? 0));
-  const [toast, setToast] = useState("");
+  const [hakiPulse, setHakiPulse] = useState(false);
   const [canHovered, setCanHovered] = useState(false);
-  const [firstDragDone, setFirstDragDone] = useState(false);
-  const [showTurnHint, setShowTurnHint] = useState(false);
-
-  const [onboardingSeen, setOnboardingSeen] = useState(() => localStorage.getItem("onboarding_seen") === "1");
-  const [onboardingVisible, setOnboardingVisible] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState(0);
-
-  const [collectible, setCollectible] = useState(() => {
-    const saved = localStorage.getItem("collectible_item");
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [collectibleOpen, setCollectibleOpen] = useState(false);
-  const [uiSafeArea, setUiSafeArea] = useState(true);
-
-  const [activeChapter, setActiveChapter] = useState(1);
+  const [dragHint, setDragHint] = useState(false);
   const [muted, setMuted] = useState(true);
-  const [interacted, setInteracted] = useState(false);
-  const chapterSfxRef = useRef(null);
+  const [userHasInteracted, setUserHasInteracted] = useState(false);
+  const [toast, setToast] = useState("");
+  const [showEaster, setShowEaster] = useState(false);
+
+  const hakiSfxRef = useRef(null);
 
   useEffect(() => {
-    document.body.style.overflow = introActive ? "hidden" : "auto";
+    document.body.style.overflow = introDone ? "auto" : "hidden";
     return () => {
       document.body.style.overflow = "auto";
     };
-  }, [introActive]);
+  }, [introDone]);
 
   useEffect(() => {
-    const onFirst = () => setInteracted(true);
-    window.addEventListener("pointerdown", onFirst, { once: true });
-    return () => window.removeEventListener("pointerdown", onFirst);
+    hakiSfxRef.current = new Audio("/audio/haki_impact.mp3");
+    hakiSfxRef.current.volume = 0.45;
+    return () => hakiSfxRef.current?.pause();
   }, []);
 
   useEffect(() => {
-    chapterSfxRef.current = new Audio("/audio/paper_unroll.mp3");
-    chapterSfxRef.current.volume = 0.2;
-    return () => chapterSfxRef.current?.pause();
-  }, []);
-
-  useEffect(() => {
-    if (demoMode) return;
-    if (onboardingSeen || introActive) return;
-
-    const kickoff = setTimeout(() => {
-      setOnboardingVisible(true);
-      setOnboardingStep(0);
-    }, 0);
-
-    const timers = [
-      kickoff,
-      setTimeout(() => setOnboardingStep(1), 2500),
-      setTimeout(() => setOnboardingStep(2), 5200),
-      setTimeout(() => {
-        setOnboardingVisible(false);
-        localStorage.setItem("onboarding_seen", "1");
-        setOnboardingSeen(true);
-      }, 8000),
-    ];
-
-    return () => timers.forEach((t) => clearTimeout(t));
-  }, [demoMode, introActive, onboardingSeen]);
-
-  useEffect(() => {
-    if (collectible) return;
-    const timer = setTimeout(() => {
-      const id = Math.random().toString(36).slice(2, 8).toUpperCase();
-      const item = { id, unlockedAt: new Date().toISOString(), name: "Stamp Grand Line" };
-      setCollectible(item);
-      localStorage.setItem("collectible_item", JSON.stringify(item));
-      setToast("Você desbloqueou um item");
-    }, 20000);
-    return () => clearTimeout(timer);
-  }, [collectible]);
-
-  useEffect(() => {
-    const sections = document.querySelectorAll("[data-chapter]");
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          const idx = Number(entry.target.getAttribute("data-chapter") || "1");
-          setActiveChapter(idx);
-          if (interacted && !muted) {
-            chapterSfxRef.current.currentTime = 0;
-            chapterSfxRef.current.play().catch(() => {});
-          }
-        });
-      },
-      { threshold: 0.6 },
-    );
-    sections.forEach((s) => observer.observe(s));
-    return () => observer.disconnect();
-  }, [interacted, muted]);
-
-  useEffect(() => {
-    if (!introActive || !introStarted) return;
-    const durationMs = introSeen && !forceLongIntro ? 1500 : 10000;
-    const start = performance.now();
+    if (introDone || !introStarted) return;
+    const duration = introSeen && !forceReplay ? 800 : 8500;
+    const startAt = performance.now();
     let raf = 0;
-    const tick = (now) => {
-      const p = Math.min((now - start) / durationMs, 1);
+
+    const step = (now) => {
+      const p = Math.min((now - startAt) / duration, 1);
       setIntroProgress(p);
       if (p < 1) {
-        raf = requestAnimationFrame(tick);
+        raf = requestAnimationFrame(step);
         return;
       }
       localStorage.setItem("intro_seen", "1");
-      setIntroActive(false);
-      setForceLongIntro(false);
+      setIntroDone(true);
+      setForceReplay(false);
     };
-    raf = requestAnimationFrame(tick);
+
+    raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [forceLongIntro, introActive, introSeen, introStarted]);
+  }, [forceReplay, introDone, introSeen, introStarted]);
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2200);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setToast(""), 1800);
+    return () => clearTimeout(timer);
   }, [toast]);
 
   useEffect(() => {
     if (!canHovered) return;
-    document.body.style.cursor = "grab";
+    document.body.style.cursor = "pointer";
     return () => {
       document.body.style.cursor = "default";
     };
   }, [canHovered]);
 
   const triggerHaki = useCallback(() => {
-    setInteracted(true);
-    setHakiPulseActive(true);
-    hakiCountRef.current += 1;
-    localStorage.setItem("haki_count", String(hakiCountRef.current));
-    if (hakiCountRef.current >= 3 && !collectible) {
-      const item = {
-        id: Math.random().toString(36).slice(2, 8).toUpperCase(),
-        unlockedAt: new Date().toISOString(),
-        name: "Wanted Ticket: Straw Hat Edition",
-      };
-      setCollectible(item);
-      localStorage.setItem("collectible_item", JSON.stringify(item));
-      setToast("Você desbloqueou um item");
-    }
+    setUserHasInteracted(true);
+    setHakiPulse(true);
     setToast("Haki ativado");
-    setTimeout(() => setHakiPulseActive(false), 2500);
-  }, [collectible]);
 
-  const dismissOnboardingForever = useCallback(() => {
-    setOnboardingVisible(false);
-    setOnboardingSeen(true);
-    localStorage.setItem("onboarding_seen", "1");
-  }, []);
+    if (!muted && hakiSfxRef.current) {
+      hakiSfxRef.current.currentTime = 0;
+      hakiSfxRef.current.play().catch(() => {});
+    }
 
-  const copyCollectibleText = useCallback(() => {
-    if (!collectible) return;
-    const txt = `${collectible.name} | ID ${collectible.id} | ${new Date(collectible.unlockedAt).toLocaleString("pt-BR")}`;
-    navigator.clipboard.writeText(txt).then(() => setToast("Texto copiado"));
-  }, [collectible]);
-
-  const copyDemoLink = useCallback(() => {
-    const url = `${window.location.origin}${window.location.pathname}?demo=1`;
-    navigator.clipboard.writeText(url).then(() => setToast("Link demo copiado"));
-  }, []);
+    setTimeout(() => setHakiPulse(false), 2500);
+  }, [muted]);
 
   const replayIntro = useCallback(() => {
-    setIntroStarted(true);
-    setIntroActive(true);
     setIntroProgress(0);
-    setForceLongIntro(true);
+    setIntroDone(false);
+    setIntroStarted(true);
+    setForceReplay(true);
   }, []);
 
   return (
-    <div className={`app-shell ${uiSafeArea ? "safe-area" : ""}`}>
-      <div className="bg-layer" />
-
+    <div className="app-shell">
       <div className="canvas-layer">
-        <Canvas camera={{ position: [0, 0.5, 6], fov: 42 }} shadows>
-          <Loader />
-          <Scene
-            introActive={introActive}
+        <Canvas camera={{ position: [0, 0.5, 5.2], fov: 42 }} shadows>
+          <SceneLoader />
+          <Stage
+            introDone={introDone}
             introProgress={introProgress}
-            hakiPulseActive={hakiPulseActive}
-            onHaki={triggerHaki}
-            onHover={setCanHovered}
-            onDragged={() => {
-              if (!firstDragDone) {
-                setFirstDragDone(true);
-                setShowTurnHint(true);
-                setTimeout(() => setShowTurnHint(false), 2000);
-              }
+            hakiPulse={hakiPulse}
+            canHovered={canHovered}
+            onCanHover={setCanHovered}
+            onCanClick={triggerHaki}
+            onIntroDone={() => {}}
+            onDragStart={() => {
+              if (dragHint) return;
+              setDragHint(true);
+              setTimeout(() => setDragHint(false), 2000);
             }}
-            firstDragDone={showTurnHint}
           />
         </Canvas>
       </div>
 
-      <div className="ui-overlay pointer-none">
-        <header className="top-ui pointer-auto">
-          <span className="badge">Coca-Cola x One Piece</span>
-          {demoMode && <span className="badge demo">DEMO MODE</span>}
-          <button type="button" className="btn btn-ghost" onClick={() => setMuted((v) => !v)}>
-            {muted ? "Som off" : "Som on"}
+      <div className="hud pointer-none">
+        <div className="hud-left pointer-auto">Coca-Cola x One Piece (Concept)</div>
+        <div className="hud-right pointer-auto">
+          <button type="button" className="chip" onClick={() => { setUserHasInteracted(true); setMuted((v) => !v); }}>
+            {muted ? "Som Off" : "Som On"}
           </button>
-        </header>
+          <button type="button" className="chip" onClick={() => setToast("Abra no celular para AR")}>AR</button>
+          <button type="button" className="chip" onClick={() => setShowEaster((v) => !v)}>Easter</button>
+        </div>
 
-        <main className="story">
-          <section className="chapter hero" data-chapter="1">
-            <Motion.h1 initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }}>
-              Portfólio vivo: Grand Line Edition
-            </Motion.h1>
-            <p>Direção visual 3D, WebXR e microinterações para uma experiência compartilhável.</p>
-            <div className="row pointer-auto">
-              <Motion.button whileHover={{ y: -2, scale: 1.02 }} className="btn btn-primary">
-                Explorar capítulos
-              </Motion.button>
-              <Motion.a whileHover={{ y: -2 }} className="btn btn-ghost" href={`mailto:${CONTACT_EMAIL}`}>
-                Contato
-              </Motion.a>
-            </div>
-            {canHovered && <div className="mini-tooltip">Clique para Haki</div>}
-          </section>
-
-          <section className="chapter panel" data-chapter="2">
-            <h2>Narrativa interativa</h2>
-            <ul>
-              <li>Intro em 3 fases com progressão cinematográfica (8–12s).</li>
-              <li>Lata fixa com giro lento, textura molhada e pulse temporal de Haki.</li>
-              <li>Thousand Sunny em loop horizontal contínuo atrás da lata.</li>
-            </ul>
-          </section>
-
-          <section className="chapter panel" data-chapter="3">
-            <h2>Colecionável</h2>
-            <p>Ative Haki 3x ou permaneça 20s para desbloquear o item premium.</p>
-            <div className="row pointer-auto">
-              <button type="button" className="btn btn-secondary" disabled={!collectible} onClick={() => setCollectibleOpen(true)}>
-                Ver colecionável
-              </button>
-            </div>
-          </section>
-
-          <section className="chapter panel" data-chapter="4">
-            <h2>Making Of</h2>
-            <p>Stack: React 19, R3F/drei, Framer Motion, WebXR-ready.</p>
-            <ul>
-              <li>Camadas separadas para background, canvas, overlays e UI.</li>
-              <li>Onboarding guiado persistido em localStorage.</li>
-              <li>Modo demo com controles rápidos para apresentação.</li>
-            </ul>
-            <div className="row pointer-auto">
-              <button type="button" className="btn btn-primary" onClick={replayIntro}>
-                Rever abertura
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={copyDemoLink}>
-                Copiar link demo
-              </button>
-            </div>
-          </section>
-        </main>
+        <div className="hero-center">
+          <h1>Grand Line Coke</h1>
+          <p>Uma peça conceitual de portfólio vivo em React + R3F + WebXR.</p>
+          <Motion.button
+            whileHover={{ y: -2 }}
+            type="button"
+            className="btn btn-primary pointer-auto"
+            onClick={() => document.getElementById("making-of")?.scrollIntoView({ behavior: "smooth" })}
+          >
+            Explorar
+          </Motion.button>
+          {canHovered && <span className="micro-tip">Clique para Haki</span>}
+          {dragHint && <span className="micro-tip">Girar</span>}
+        </div>
       </div>
 
-      <div className="chapter-indicator">{activeChapter}/{CHAPTERS.length}</div>
+      {showEaster && <div className="easter-toast pointer-auto">🏴‍☠️ Easter desbloqueado: Grand Line Stamp</div>}
 
-      {demoMode && (
-        <div className="demo-panel pointer-auto">
-          <button type="button" className="btn" onClick={replayIntro}>Play Intro</button>
-          <button type="button" className="btn" onClick={triggerHaki}>Trigger Haki</button>
-          <button type="button" className="btn" onClick={copyDemoLink}>Show AR (copy link)</button>
-          <button type="button" className="btn" onClick={() => setUiSafeArea((v) => !v)}>Toggle UI safe area</button>
-        </div>
-      )}
+      <FooterDock onReplayIntro={replayIntro} />
 
-      {introActive && (
+      {!introDone && (
         <IntroOverlay
-          introStarted={introStarted}
-          introProgress={introProgress}
-          isShortVersion={introSeen && !forceLongIntro}
+          started={introStarted}
+          progress={introProgress}
+          shortIntro={introSeen && !forceReplay}
           onStart={() => {
-            setInteracted(true);
+            setUserHasInteracted(true);
             setIntroStarted(true);
           }}
           onSkip={() => {
             localStorage.setItem("intro_seen", "1");
-            setIntroActive(false);
+            setIntroDone(true);
             setIntroStarted(true);
           }}
         />
       )}
 
-      <OnboardingOverlay visible={onboardingVisible} stepIndex={onboardingStep} onDismissForever={dismissOnboardingForever} />
-
-      {collectibleOpen && collectible && (
-        <div className="modal-backdrop pointer-auto" onClick={() => setCollectibleOpen(false)}>
-          <div className="collectible-card" onClick={(e) => e.stopPropagation()}>
-            <p className="kicker">Unlocked collectible</p>
-            <h3>{collectible.name}</h3>
-            <p>ID #{collectible.id}</p>
-            <p>{new Date(collectible.unlockedAt).toLocaleString("pt-BR")}</p>
-            <div className="row">
-              <button type="button" className="btn btn-primary" onClick={copyCollectibleText}>Copiar texto</button>
-              <button type="button" className="btn btn-ghost" onClick={() => setCollectibleOpen(false)}>Fechar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {toast && <div className="toast">{toast}</div>}
+      {!userHasInteracted && <button type="button" className="interaction-cue pointer-auto" onClick={() => setUserHasInteracted(true)}>Ativar interação</button>}
     </div>
   );
 }

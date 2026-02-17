@@ -1,46 +1,41 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
-import { TextureLoader, RepeatWrapping } from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
+import { TextureLoader, RepeatWrapping } from "three";
 import * as THREE from "three";
 
-const BASE_YAW_SPEED = 0.09;
+const CAN_POSITION = [1.6, -0.25, -0.6];
+const CAN_SCALE = 0.4;
+const YAW_SPEED = 0.08;
 
-export default function RealCan({
-  hakiPulseActive,
-  onClick,
-  onHoverChange,
-  arSessionActive,
-  arScale,
-  arRotationY,
-  arPosition,
-}) {
-  const meshRef = useRef();
-  const dropletsTextureRaw = useLoader(TextureLoader, "/textures/droplets_normal.jpg");
-  const labelTexture = useLoader(TextureLoader, "/coca-label.jpg");
-  const canObj = useLoader(OBJLoader, "/14025_Soda_Can_v3_l3.obj");
+export default function RealCan({ hakiPulse, hovered, onHoverChange, onClick }) {
+  const rootRef = useRef();
+  const pivotRef = useRef();
+  const baseObjRaw = useLoader(OBJLoader, "/14025_Soda_Can_v3_l3.obj");
+  const label = useLoader(TextureLoader, "/coca-label.jpg");
+  const dropsRaw = useLoader(TextureLoader, "/textures/droplets_normal.jpg");
 
-  const baseObj = useMemo(() => canObj.clone(true), [canObj]);
-  const overlayObj = useMemo(() => canObj.clone(true), [canObj]);
-  const dropletsTexture = useMemo(() => {
-    const tx = dropletsTextureRaw.clone();
-    tx.wrapS = RepeatWrapping;
-    tx.wrapT = RepeatWrapping;
-    tx.repeat.set(2, 3);
-    tx.flipY = false;
-    return tx;
-  }, [dropletsTextureRaw]);
+  const baseObj = useMemo(() => baseObjRaw.clone(true), [baseObjRaw]);
+  const overlayObj = useMemo(() => baseObjRaw.clone(true), [baseObjRaw]);
+  const drops = useMemo(() => {
+    const tex = dropsRaw.clone();
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
+    tex.repeat.set(2, 3);
+    tex.flipY = false;
+    return tex;
+  }, [dropsRaw]);
 
   useLayoutEffect(() => {
     baseObj.traverse((child) => {
       if (!child.isMesh) return;
       child.material = new THREE.MeshStandardMaterial({
-        map: labelTexture,
-        metalness: 0.58,
-        roughness: 0.26,
-        envMapIntensity: 1.9,
-        emissive: new THREE.Color("#20070a"),
-        emissiveIntensity: 0.03,
+        map: label,
+        metalness: 0.7,
+        roughness: 0.18,
+        envMapIntensity: 2.4,
+        emissive: new THREE.Color("#180509"),
+        emissiveIntensity: 0.06,
       });
       child.castShadow = true;
       child.receiveShadow = true;
@@ -49,80 +44,71 @@ export default function RealCan({
     overlayObj.traverse((child) => {
       if (!child.isMesh) return;
       child.material = new THREE.MeshPhysicalMaterial({
-        normalMap: dropletsTexture,
-        normalScale: new THREE.Vector2(0.6, 0.6),
+        normalMap: drops,
+        normalScale: new THREE.Vector2(0.52, 0.52),
         clearcoat: 1,
-        clearcoatRoughness: 0.1,
-        roughness: 0.18,
+        clearcoatRoughness: 0.08,
+        roughness: 0.12,
         transmission: 0.2,
         transparent: true,
-        opacity: 0.35,
-        envMapIntensity: 1.4,
+        opacity: 0.32,
+        envMapIntensity: 2,
         polygonOffset: true,
         polygonOffsetFactor: -1,
         polygonOffsetUnits: -1,
       });
-      child.castShadow = false;
-      child.receiveShadow = false;
     });
-  }, [baseObj, dropletsTexture, labelTexture, overlayObj]);
+  }, [baseObj, drops, label, overlayObj]);
 
-  const dropletsRef = useRef();
+  const dropsRef = useRef();
 
   useLayoutEffect(() => {
-    dropletsRef.current = dropletsTexture;
-  }, [dropletsTexture]);
+    dropsRef.current = drops;
+  }, [drops]);
 
   useFrame((state, delta) => {
-    if (dropletsRef.current) {
-      dropletsRef.current.offset.y -= 0.0004;
-      dropletsRef.current.offset.x = Math.sin(state.clock.elapsedTime * 0.22) * 0.012;
+    if (rootRef.current) {
+      rootRef.current.position.set(CAN_POSITION[0], CAN_POSITION[1], CAN_POSITION[2]);
+      rootRef.current.rotation.y += YAW_SPEED * delta;
     }
 
-    if (!meshRef.current) return;
-
-    if (arSessionActive) {
-      const p = arPosition ?? [0, -0.2, -1.1];
-      meshRef.current.position.set(p[0], p[1], p[2]);
-      meshRef.current.rotation.set(0, arRotationY, 0);
-      meshRef.current.scale.setScalar(arScale);
-      return;
+    if (pivotRef.current) {
+      // Pivot interno: corrige orientação do OBJ mantendo rotação global limpa no root
+      pivotRef.current.rotation.set(-Math.PI / 2, 0, 0);
+      pivotRef.current.scale.setScalar(CAN_SCALE);
     }
 
-    meshRef.current.position.set(0, -0.6, 0);
-    meshRef.current.rotation.x = THREE.MathUtils.lerp(meshRef.current.rotation.x, 0, 0.12);
-    meshRef.current.rotation.z = THREE.MathUtils.lerp(meshRef.current.rotation.z, 0, 0.12);
-    meshRef.current.rotation.y += BASE_YAW_SPEED * delta;
-
-    const targetScale = hakiPulseActive ? 1.05 : 1;
-    meshRef.current.scale.setScalar(
-      THREE.MathUtils.lerp(meshRef.current.scale.x, targetScale, hakiPulseActive ? 0.14 : 0.08),
-    );
+    if (dropsRef.current) {
+      dropsRef.current.offset.y -= 0.00035;
+      dropsRef.current.offset.x = Math.sin(state.clock.elapsedTime * 0.2) * 0.012;
+    }
 
     baseObj.traverse((child) => {
       if (!child.isMesh) return;
-      child.material.envMapIntensity = THREE.MathUtils.lerp(
-        child.material.envMapIntensity,
-        hakiPulseActive ? 2.7 : 1.9,
-        0.08,
-      );
       child.material.emissiveIntensity = THREE.MathUtils.lerp(
         child.material.emissiveIntensity,
-        hakiPulseActive ? 0.22 : 0.03,
-        0.1,
+        hakiPulse ? 0.26 : hovered ? 0.14 : 0.06,
+        0.12,
+      );
+      child.material.envMapIntensity = THREE.MathUtils.lerp(
+        child.material.envMapIntensity,
+        hakiPulse ? 3.2 : hovered ? 2.9 : 2.4,
+        0.09,
       );
     });
   });
 
   return (
     <group
-      ref={meshRef}
+      ref={rootRef}
       onClick={onClick}
       onPointerOver={() => onHoverChange(true)}
       onPointerOut={() => onHoverChange(false)}
     >
-      <primitive object={baseObj} />
-      <primitive object={overlayObj} />
+      <group ref={pivotRef}>
+        <primitive object={baseObj} />
+        <primitive object={overlayObj} />
+      </group>
     </group>
   );
 }
