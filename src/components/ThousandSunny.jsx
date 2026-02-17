@@ -88,6 +88,7 @@ export default function ThousandSunny({ hasModel = true, mode = "loop", progress
 
   if (!hasModel) return <Fallback mode={mode} progress={progress} onIntroDone={onIntroDone} />;
 
+  if (!hasModel) return <ThousandSunnyFallback mode={mode} progress={progress} />;
   return (
     <Suspense fallback={<Fallback mode={mode} progress={progress} onIntroDone={onIntroDone} />}>
       <Model mode={mode} progress={progress} onIntroDone={onIntroDone} />

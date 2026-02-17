@@ -31,6 +31,9 @@ body {
   background: rgba(6,11,22,.65);
   font-size: .72rem;
 }
+.btn-primary { background: linear-gradient(135deg,#9f2028,#d13743); }
+.btn-secondary { background: rgba(240,182,68,.28); border-color: rgba(240,182,68,.6); }
+.btn-ghost { background: rgba(9,12,20,.5); }
 
 .hud-right {
   position: fixed;
@@ -110,7 +113,6 @@ body {
   background: rgba(0,0,0,.86);
   display: grid;
   place-items: center;
-  padding: 1rem;
 }
 
 .intro-card {
